@@ -1,1 +1,8 @@
-
+scikit-learn
+pandas
+numpy
+xgboost
+nfl_data_py
+uvicorn
+fastapi
+pydantic
