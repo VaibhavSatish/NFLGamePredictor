@@ -10,9 +10,14 @@ app = FastAPI()
 model = xgboost.XGBClassifier(n_estimators=200, max_depth=8, learning_rate=0.1, random_state=42)
 team_stats = {}
 
-def main():
-    print("Hello from nflgamepredictor!")
+@app.on_event("startup")
+def train():
+    pass
 
+@app.get("/")
+def health_check():
+    return {"status": "ok"}
 
 if __name__ == "__main__":
-    main()
+    print("Running")
+    uvicorn.run(app, host='127.0.0.1', port=8000)
