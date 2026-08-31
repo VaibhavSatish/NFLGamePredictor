@@ -12,9 +12,12 @@
         <h1>NFL Game Predictor</h1>
 
         <div id="loading" class="loading">
-          <div class="spinner"></div>
           <p class="loading-text">Warming up the model...</p>
-          <p class="loading-hint">Training on 2015-2025 play-by-play data. This can take a few minutes on first start.</p>
+          <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Model training progress">
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
+          <p id="loadingPercent" class="loading-percent">0%</p>
+          <p id="loadingHint" class="loading-hint">Starting the model...</p>
         </div>
 
         <div id="app" hidden>

@@ -12,6 +12,10 @@ const errorEl = document.getElementById("error");
 const resultEl = document.getElementById("result");
 const loadingEl = document.getElementById("loading");
 const appEl = document.getElementById("app");
+const progressBar = document.getElementById("progressBar");
+const loadingPercent = document.getElementById("loadingPercent");
+const loadingHint = document.getElementById("loadingHint");
+const progressEl = document.querySelector(".progress");
 
 function fillSelect(select, selected) {
   select.innerHTML = NFL_TEAMS.map(
@@ -35,22 +39,40 @@ function showResult(data) {
   `;
 }
 
-async function isModelReady() {
-  try {
-    const response = await fetch("/api/status");
-    const data = await response.json();
-    return data.ready === true;
-  } catch {
-    return false;
+function updateProgress(data) {
+  const progress = Math.max(0, Math.min(100, Number(data.progress) || 0));
+  progressBar.style.width = `${progress}%`;
+  loadingPercent.textContent = `${progress}%`;
+  loadingHint.textContent = data.message || "Training the model...";
+  if (progressEl) {
+    progressEl.setAttribute("aria-valuenow", String(progress));
   }
 }
 
-async function waitForModel() {
-  while (!(await isModelReady())) {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+async function getModelStatus() {
+  try {
+    const response = await fetch("/api/status", { cache: "no-store" });
+    return await response.json();
+  } catch {
+    return { ready: false, progress: 0, message: "Waiting for the model server..." };
   }
+}
+
+function revealApp() {
   loadingEl.hidden = true;
   appEl.hidden = false;
+}
+
+async function waitForModel() {
+  let status = await getModelStatus();
+  updateProgress(status);
+  while (!status.ready) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    status = await getModelStatus();
+    updateProgress(status);
+  }
+  updateProgress({ progress: 100, message: "Model ready." });
+  revealApp();
 }
 
 fillSelect(homeSelect, "KC");
