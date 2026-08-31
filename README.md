@@ -13,3 +13,10 @@ npm run dev
 
 - UI: http://localhost:5001
 - FastAPI: http://localhost:8000
+
+## TODOs
+[ ] Add Team Logos
+[ ] Tune the model to provide better results
+[ ] Add scores from current games to UI
+[ ] Deploy Predictor
+[ ] Add Auth system
