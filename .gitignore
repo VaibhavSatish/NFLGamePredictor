@@ -1,0 +1,29 @@
+# Global OS Caches
+.DS_Store
+Thumbs.db
+*.log
+
+# Python / FastAPI Machine Learning
+__pycache__/
+*.pyc
+*.pyo
+env/
+venv/
+.venv/
+*.pkl
+*.xgb
+
+# Node.js Express Backend (Targeting your 'frontend' folder)
+node_modules/
+frontend/node_modules/
+
+# Next.js Frontend (Targeting your 'nextjs-frontend' folder)
+nextjs-frontend/node_modules/
+nextjs-frontend/.next/
+nextjs-frontend/out/
+
+# Environment Configurations
+.env
+.env.local
+frontend/.env
+nextjs-frontend/.env

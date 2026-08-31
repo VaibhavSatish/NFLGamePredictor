@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -5,65 +6,104 @@ import pandas as pd
 import numpy as np
 import xgboost 
 import nfl_data_py as nfl
+import asyncio
 
-app = FastAPI()
+# Global application engines
 model = xgboost.XGBClassifier(n_estimators=200, max_depth=8, learning_rate=0.1, random_state=42)
 team_stats = {}
 
-@app.on_event("startup")
-def train():
+def normalize_team_code(team_str):
+    mapping = {
+        'OAK': 'LV',  # Raiders relocation mapping
+        'SD': 'LAC',  # Chargers relocation mapping
+        'STL': 'LA',  # Rams relocation mapping
+        'PHO': 'ARI', # Cardinals legacy code mapping
+    }
+    return mapping.get(team_str, team_str)
+
+# 1. Modern Asynchronous Lifespan Handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global model, team_stats
-    pbp_df = nfl.import_pbp_data([2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025])
-    pbp_df = pbp_df.dropna(subset=['epa', 'posteam', 'defteam'])
-    pbp_df = pbp_df[pbp_df['play_type'].isin(['pass', 'run'])]
-    off_epa = pbp_df.groupby('posteam')['epa'].mean().reset_index().rename(columns={'posteam': 'team', 'epa': 'off_epa'})
-    def_epa = pbp_df.groupby('defteam')['epa'].mean().reset_index().rename(columns={'defteam': 'team', 'epa': 'def_epa'})
-    team_profiles = pd.merge(off_epa, def_epa, on='team')
-    for _, row in team_profiles.iterrows():
-        team_stats[row['team']] = {
-            "off_epa": row['off_epa'],
-            "def_epa": row['def_epa']
-        }
-    sched_df = nfl.import_schedules([2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025])
-    sched_df = sched_df[sched_df['game_type'] == 'REG'].dropna(subset=['home_score', 'away_score'])
-    training_data = []
+    print("🏈 FastAPI Lifespan Started: Loading multi-season data frames via offloaded thread matrix...")
     
-    for _, game in sched_df.iterrows():
-        home = game['home_team']
-        away = game['away_team']
-        if home in team_stats and away in team_stats:
-            h_profile = team_stats[home]
-            a_profile = team_stats[away]
-            
-            features = [
-                h_profile['off_epa'], 
-                h_profile['def_epa'],
-                a_profile['off_epa'],
-                a_profile['def_epa']
-            ]
-            target = 1 if game['home_score'] > game['away_score'] else 0
-            
-            training_data.append(features + [target])
-    dataset = pd.DataFrame(training_data, columns=['h_off', 'h_def', 'a_off', 'a_def', 'label'])
+    # Run the heavy synchronous dataset processing inside a background worker thread
+    # This prevents the network loop from locking, allowing health checks to respond immediately
+    def background_training_task():
+        global model, team_stats
+        seasons = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+        
+        # Pull play-by-play matrices safely
+        pbp_df = nfl.import_pbp_data(seasons)
+        pbp_df = pbp_df.dropna(subset=['epa', 'posteam', 'defteam'])
+        pbp_df = pbp_df[pbp_df['play_type'].isin(['pass', 'run'])]
+        
+        off_epa = pbp_df.groupby('posteam')['epa'].mean().reset_index().rename(columns={'posteam': 'team', 'epa': 'off_epa'})
+        def_epa = pbp_df.groupby('defteam')['epa'].mean().reset_index().rename(columns={'defteam': 'team', 'epa': 'def_epa'})
+        team_profiles = pd.merge(off_epa, def_epa, on='team')
+        
+        for _, row in team_profiles.iterrows():
+            normalized_name = normalize_team_code(row['team'])
+            team_stats[normalized_name] = {
+                "off_epa": float(row['off_epa']),
+                "def_epa": float(row['def_epa'])
+            }
+        
+        print("📊 Team Analytics profiles generated. Fitting schedule constraints...")
+        sched_df = nfl.import_schedules(seasons)
+        sched_df = sched_df[sched_df['game_type'] == 'REG'].dropna(subset=['home_score', 'away_score'])
+        
+        training_data = []
+        for _, game in sched_df.iterrows():
+            home = game['home_team']
+            away = game['away_team']
+            if home in team_stats and away in team_stats:
+                h_profile = team_stats[home]
+                a_profile = team_stats[away]
+                
+                features = [
+                    h_profile['off_epa'], 
+                    h_profile['def_epa'],
+                    a_profile['off_epa'],
+                    a_profile['def_epa']
+                ]
+                target = 1 if game['home_score'] > game['away_score'] else 0
+                training_data.append(features + [target])
+                
+        dataset = pd.DataFrame(training_data, columns=['h_off', 'h_def', 'a_off', 'a_def', 'label'])
+        X = dataset[['h_off', 'h_def', 'a_off', 'a_def']]
+        y = dataset['label']
+        
+        model.fit(X, y)
+        print("🤖 XGBoost Classifier pipeline synchronized and trained successfully!")
+
+    # Offload execution loop cleanly to preserve port exposure response times
+    await asyncio.to_thread(background_training_task)
+    yield
     
-    X = dataset[['h_off', 'h_def', 'a_off', 'a_def']]
-    y = dataset['label']
-    model.fit(X, y)
+    print("🧹 Revoking active model constraints on shutdown...")
+    team_stats.clear()
+
+# 2. Bind application directly to lifespan constructor
+app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 def health_check():
     return {"status": "ok"}
 
 class PredictionRequest(BaseModel):
-    Team_one:str
-    Team_two:str
+    Team_one: str
+    Team_two: str
 
-@app.get("/predict")
+@app.post("/predict")
 def predict(req: PredictionRequest):
-    team_one_res = team_stats.get(req.Team_one, {0.0, 0.0})
-    team_two_res = team_stats.get(req.Team_two, {0.0, 0.0})
+    # Overwrite Set structures {0.0, 0.0} with clear floating dictionary parameters
+    team_one_res = team_stats.get(req.Team_one, {"off_epa": 0.0, "def_epa": 0.0})
+    team_two_res = team_stats.get(req.Team_two, {"off_epa": 0.0, "def_epa": 0.0})
+    
     input_features = np.array([[team_one_res['off_epa'], team_one_res['def_epa'], team_two_res['off_epa'], team_two_res['def_epa']]])
     probabilities = model.predict_proba(input_features)[0]
+    
     return {
         "home_team": req.Team_one,
         "away_team": req.Team_two,
@@ -77,4 +117,4 @@ def predict(req: PredictionRequest):
     }
 
 if __name__ == "__main__":
-    uvicorn.run(app, host='127.0.0.1', port=8000)
+    uvicorn.run(app, host='0.0.0.0', port=8000)
