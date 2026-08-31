@@ -2,14 +2,9 @@
   "name": "nfl-predictor-ecosystem",
   "version": "1.0.0",
   "scripts": {
-    "dev": "concurrently --kill-others -n \"FASTAPI,EXPRESS,NEXTJS\" -c \"yellow,blue,green\" \"uv run main.py\" \"npm run start --prefix frontend || (cd frontend && node server.js)\" \"npm run dev --prefix nextjs-frontend\""
+    "dev": "concurrently --kill-others -n \"FASTAPI,EXPRESS\" -c \"yellow,blue\" \"uv run main.py\" \"npm start --prefix frontend\""
   },
   "devDependencies": {
     "concurrently": "^10.0.5"
-  },
-  "dependencies": {
-    "axios": "^1.20.0",
-    "cors": "^2.8.6",
-    "express": "^5.2.1"
   }
 }

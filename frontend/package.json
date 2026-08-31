@@ -1,10 +1,10 @@
 {
   "name": "frontend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Express UI and API gateway for the NFL game predictor",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
@@ -12,7 +12,6 @@
   "type": "commonjs",
   "dependencies": {
     "axios": "^1.20.0",
-    "cors": "^2.8.6",
     "express": "^5.2.1"
   }
 }

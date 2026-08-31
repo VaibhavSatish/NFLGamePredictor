@@ -13,17 +13,11 @@ venv/
 *.pkl
 *.xgb
 
-# Node.js Express Backend (Targeting your 'frontend' folder)
+# Node.js
 node_modules/
 frontend/node_modules/
-
-# Next.js Frontend (Targeting your 'nextjs-frontend' folder)
-nextjs-frontend/node_modules/
-nextjs-frontend/.next/
-nextjs-frontend/out/
 
 # Environment Configurations
 .env
 .env.local
 frontend/.env
-nextjs-frontend/.env
