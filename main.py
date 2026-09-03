@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
-import uvicorn
 from fastapi import FastAPI, HTTPException
+import uvicorn
 from pydantic import BaseModel
 import pandas as pd
 import numpy as np
@@ -21,7 +21,7 @@ def normalize_team_code(team_str):
     mapping = {
         "OAK": "LV",
         "SD": "LAC",
-        "STL": "LA",
+        "STL": "LAR",
         "PHO": "ARI",
     }
     return mapping.get(team_str, team_str)
