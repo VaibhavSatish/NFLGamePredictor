@@ -10,7 +10,7 @@ import nfl_data_py as nfl
 import asyncio
 import requests
 
-model = xgboost.XGBClassifier(n_estimators=200, max_depth=8, learning_rate=0.1, random_state=42)
+model = xgboost.XGBClassifier(n_estimators=200, max_depth=8, learning_rate=0.1, random_state=42) # Tune
 team_stats = {}
 training_state = {
     "ready": False,
