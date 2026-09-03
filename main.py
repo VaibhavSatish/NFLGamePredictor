@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from pydantic import BaseModel
 import pandas as pd
@@ -7,6 +8,7 @@ import numpy as np
 import xgboost
 import nfl_data_py as nfl
 import asyncio
+import requests
 
 model = xgboost.XGBClassifier(n_estimators=200, max_depth=8, learning_rate=0.1, random_state=42)
 team_stats = {}
@@ -121,6 +123,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def health_check():
@@ -162,6 +171,44 @@ def predict(req: PredictionRequest):
         },
     }
 
+@app.get("/api/scores/active-teams")
+def get_active_team_scores():
+    try:
+        url = "http://espn.com"
+        data = requests.get(url).json()
+        active_teams_list = []
+        
+        for event in data.get("events", []):
+            status_text = event["status"]["type"]["detail"]
+            competitors = event["competitions"]["competitors"]
+            
+            home = next(c for c in competitors if c["homeAway"] == "home")
+            away = next(c for c in competitors if c["homeAway"] == "away")
+            
+            h_abbr = home["team"]["abbreviation"]
+            a_abbr = away["team"]["abbreviation"]
+            
+            # Away Team Card
+            active_teams_list.append({
+                "team": a_abbr,
+                "score": away["score"],
+                "context": f"@ {h_abbr}",
+                "status": status_text,
+                "rawStatus": event["status"]["type"]["description"]
+            })
+            
+            # Home Team Card
+            active_teams_list.append({
+                "team": h_abbr,
+                "score": home["score"],
+                "context": f"vs {a_abbr}",
+                "status": status_text,
+                "rawStatus": event["status"]["type"]["description"]
+            })
+                
+        return active_teams_list
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch scoreboard: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
