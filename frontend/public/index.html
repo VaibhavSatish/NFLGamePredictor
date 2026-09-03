@@ -4,46 +4,62 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NFL Game Predictor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <!-- Live Infinite Score Ticker Wheel -->
+    <!-- Live score ticker -->
     <div class="ticker-wrap">
       <div class="ticker" id="ticker-content">
-        <div class="game-card">Loading live scores...</div>
+        <div class="game-card">Loading live scores&hellip;</div>
       </div>
     </div>
 
     <main>
       <div class="card">
         <h1>NFL Game Predictor</h1>
+        <p class="subhead">Pick a matchup and run the model for a win-probability read.</p>
 
         <div id="loading" class="loading">
-          <p class="loading-text">Warming up the model...</p>
-          <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Model training progress">
+          <p class="loading-text">Warming up the model&hellip;</p>
+          <div
+            class="progress"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            aria-label="Model training progress"
+          >
             <div id="progressBar" class="progress-bar"></div>
           </div>
           <p id="loadingPercent" class="loading-percent">0%</p>
-          <p id="loadingHint" class="loading-hint">Starting the model...</p>
+          <p id="loadingHint" class="loading-hint" aria-live="polite">Starting the model&hellip;</p>
         </div>
 
         <div id="app" hidden>
-          <div class="grid">
-            <label>
-              Home Team
+          <div class="matchup">
+            <div class="team-slot">
+              <label for="homeTeam">Home team</label>
               <select id="homeTeam"></select>
-            </label>
-            <label>
-              Away Team
+            </div>
+            <div class="vs-badge">VS</div>
+            <div class="team-slot">
+              <label for="awayTeam">Away team</label>
               <select id="awayTeam"></select>
-            </label>
+            </div>
           </div>
-          <button id="predictBtn" type="button">Calculate Game Odds</button>
+
+          <button id="predictBtn" type="button">Calculate game odds</button>
           <p id="error" class="error" hidden></p>
-          <div id="result" class="result" hidden></div>
+          <div id="result" class="result" hidden aria-live="polite"></div>
         </div>
       </div>
     </main>
+
     <script src="/app.js"></script>
   </body>
 </html>

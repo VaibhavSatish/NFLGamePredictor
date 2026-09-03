@@ -18,6 +18,14 @@ training_state = {
     "message": "Starting the model...",
 }
 
+# Rough heuristic constants for turning EPA/play into a projected score.
+# Not a validated model — just enough to give the UI a plausible final score
+# that moves in the right direction with the win-probability read.
+LEAGUE_AVERAGE_SCORE = 22.0
+EPA_POINTS_SCALE = 20.0
+MIN_PROJECTED_SCORE = 3
+MAX_PROJECTED_SCORE = 55
+
 
 def normalize_team_code(team_str):
     mapping = {
@@ -81,8 +89,12 @@ def background_training_task():
         set_progress(88, "Assembling training examples...")
         training_data = []
         for _, game in sched_df.iterrows():
-            home = game["home_team"]
-            away = game["away_team"]
+            # BUG FIX: schedule data still uses legacy codes (OAK/SD/STL/PHO)
+            # for older seasons, but team_stats keys are normalized to their
+            # current codes. Without normalizing here, every game involving
+            # a relocated/renamed franchise was silently skipped below.
+            home = normalize_team_code(game["home_team"])
+            away = normalize_team_code(game["away_team"])
             if home in team_stats and away in team_stats:
                 h_profile = team_stats[home]
                 a_profile = team_stats[away]
@@ -131,6 +143,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 def health_check():
     return {"status": "ok"}
@@ -148,6 +161,40 @@ class PredictionRequest(BaseModel):
     awayTeam: str
 
 
+def project_score(offense_epa, defense_epa):
+    return LEAGUE_AVERAGE_SCORE + EPA_POINTS_SCALE * (offense_epa - defense_epa)
+
+
+# Max point spread assigned at the most extreme win probabilities (0% or 100%).
+MAX_SPREAD = 16.0
+
+
+def project_matchup_scores(home_off_epa, home_def_epa, away_off_epa, away_def_epa, home_win_prob_pct):
+    """
+    BUG FIX: previously each team's score was computed independently from its
+    own offense-vs-opponent-defense EPA, with no link back to the win
+    probability the classifier produced. That let the two numbers disagree
+    (e.g. a team favored to win but projected to score fewer points).
+
+    Now: total points still comes from the EPA heuristic (so it reflects
+    both teams' scoring environment), but the margin between the two scores
+    is derived directly from the win probability, so the team the model
+    favors always has the higher projected score.
+    """
+    raw_home = project_score(home_off_epa, away_def_epa)
+    raw_away = project_score(away_off_epa, home_def_epa)
+    total_points = raw_home + raw_away
+
+    margin = ((home_win_prob_pct - 50.0) / 50.0) * MAX_SPREAD
+
+    home_score = total_points / 2 + margin / 2
+    away_score = total_points / 2 - margin / 2
+
+    home_score = int(round(max(MIN_PROJECTED_SCORE, min(MAX_PROJECTED_SCORE, home_score))))
+    away_score = int(round(max(MIN_PROJECTED_SCORE, min(MAX_PROJECTED_SCORE, away_score))))
+    return home_score, away_score
+
+
 # Aliased to handle both /api/predict and /predict
 @app.post("/api/predict")
 @app.post("/predict")
@@ -155,20 +202,37 @@ def predict(req: PredictionRequest):
     if not training_state["ready"]:
         raise HTTPException(status_code=503, detail="Model is still training")
 
-    team_one_res = team_stats.get(req.homeTeam, {"off_epa": 0.0, "def_epa": 0.0})
-    team_two_res = team_stats.get(req.awayTeam, {"off_epa": 0.0, "def_epa": 0.0})
+    # BUG FIX: normalize incoming team codes the same way training data was
+    # normalized, so legacy abbreviations resolve to the right stats instead
+    # of silently falling back to league-average (0.0/0.0) placeholders.
+    home_code = normalize_team_code(req.homeTeam)
+    away_code = normalize_team_code(req.awayTeam)
+
+    team_one_res = team_stats.get(home_code, {"off_epa": 0.0, "def_epa": 0.0})
+    team_two_res = team_stats.get(away_code, {"off_epa": 0.0, "def_epa": 0.0})
 
     input_features = np.array(
         [[team_one_res["off_epa"], team_one_res["def_epa"], team_two_res["off_epa"], team_two_res["def_epa"]]]
     )
     probabilities = model.predict_proba(input_features)[0]
+    home_win_prob_pct = float(probabilities[1]) * 100
+
+    home_projected_score, away_projected_score = project_matchup_scores(
+        team_one_res["off_epa"],
+        team_one_res["def_epa"],
+        team_two_res["off_epa"],
+        team_two_res["def_epa"],
+        home_win_prob_pct,
+    )
 
     return {
-        "home_team": req.homeTeam,
-        "away_team": req.awayTeam,
-        "home_win_probability": round(float(probabilities[1]) * 100, 2),
+        "home_team": home_code,
+        "away_team": away_code,
+        "home_win_probability": round(home_win_prob_pct, 2),
         "away_win_probability": round(float(probabilities[0]) * 100, 2),
-        "predicted_winner": req.homeTeam if probabilities[1] > probabilities[0] else req.awayTeam,
+        "predicted_winner": home_code if probabilities[1] > probabilities[0] else away_code,
+        "home_projected_score": home_projected_score,
+        "away_projected_score": away_projected_score,
         "metrics_context": {
             "home_off_epa_ranking": "Above Average" if team_one_res["off_epa"] > 0 else "Below Average",
             "away_off_epa_ranking": "Above Average" if team_two_res["off_epa"] > 0 else "Below Average",

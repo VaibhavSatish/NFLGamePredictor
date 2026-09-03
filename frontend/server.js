@@ -30,14 +30,20 @@ app.get("/api/status", async (req, res) => {
 app.post("/api/predict", async (req, res) => {
   try {
     const { homeTeam, awayTeam } = req.body;
-    const response = await axios.post(`${PYTHON_API_URL}/predict`, {
-      Team_one: homeTeam,
-      Team_two: awayTeam,
-    });
+    // BUG FIX: FastAPI's PredictionRequest model expects `homeTeam`/`awayTeam`.
+    // This was previously sending `Team_one`/`Team_two`, which FastAPI would
+    // reject with a 422 validation error on every request.
+    const response = await axios.post(
+      `${PYTHON_API_URL}/predict`,
+      { homeTeam, awayTeam },
+      { timeout: 5000 }
+    );
     res.json(response.data);
   } catch (error) {
     console.error("Error communicating with ML engine:", error.message);
-    res.status(500).json({ error: "Failed to generate prediction" });
+    const status = error.response?.status || 500;
+    const detail = error.response?.data?.detail || "Failed to generate prediction";
+    res.status(status).json({ error: detail });
   }
 });
 
