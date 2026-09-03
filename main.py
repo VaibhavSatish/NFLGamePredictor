@@ -136,23 +136,27 @@ def health_check():
     return {"status": "ok"}
 
 
+# Aliased to handle both /api/status and /status
+@app.get("/api/status")
 @app.get("/status")
 def model_status():
     return training_state
 
 
 class PredictionRequest(BaseModel):
-    Team_one: str
-    Team_two: str
+    homeTeam: str
+    awayTeam: str
 
 
+# Aliased to handle both /api/predict and /predict
+@app.post("/api/predict")
 @app.post("/predict")
 def predict(req: PredictionRequest):
     if not training_state["ready"]:
         raise HTTPException(status_code=503, detail="Model is still training")
 
-    team_one_res = team_stats.get(req.Team_one, {"off_epa": 0.0, "def_epa": 0.0})
-    team_two_res = team_stats.get(req.Team_two, {"off_epa": 0.0, "def_epa": 0.0})
+    team_one_res = team_stats.get(req.homeTeam, {"off_epa": 0.0, "def_epa": 0.0})
+    team_two_res = team_stats.get(req.awayTeam, {"off_epa": 0.0, "def_epa": 0.0})
 
     input_features = np.array(
         [[team_one_res["off_epa"], team_one_res["def_epa"], team_two_res["off_epa"], team_two_res["def_epa"]]]
@@ -160,55 +164,69 @@ def predict(req: PredictionRequest):
     probabilities = model.predict_proba(input_features)[0]
 
     return {
-        "home_team": req.Team_one,
-        "away_team": req.Team_two,
+        "home_team": req.homeTeam,
+        "away_team": req.awayTeam,
         "home_win_probability": round(float(probabilities[1]) * 100, 2),
         "away_win_probability": round(float(probabilities[0]) * 100, 2),
-        "predicted_winner": req.Team_one if probabilities[1] > probabilities[0] else req.Team_two,
+        "predicted_winner": req.homeTeam if probabilities[1] > probabilities[0] else req.awayTeam,
         "metrics_context": {
             "home_off_epa_ranking": "Above Average" if team_one_res["off_epa"] > 0 else "Below Average",
             "away_off_epa_ranking": "Above Average" if team_two_res["off_epa"] > 0 else "Below Average",
         },
     }
 
+
+# Cleaned score ticker endpoint (Returns 1 object per game instead of duplicate team objects)
+@app.get("/api/scores")
 @app.get("/api/scores/active-teams")
-def get_active_team_scores():
+def get_scores():
     try:
-        url = "http://espn.com"
-        data = requests.get(url).json()
-        active_teams_list = []
-        
+        url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+        data = requests.get(url, timeout=10).json()
+        games = []
+
         for event in data.get("events", []):
-            status_text = event["status"]["type"]["detail"]
-            competitors = event["competitions"]["competitors"]
-            
-            home = next(c for c in competitors if c["homeAway"] == "home")
-            away = next(c for c in competitors if c["homeAway"] == "away")
-            
-            h_abbr = home["team"]["abbreviation"]
-            a_abbr = away["team"]["abbreviation"]
-            
-            # Away Team Card
-            active_teams_list.append({
-                "team": a_abbr,
-                "score": away["score"],
-                "context": f"@ {h_abbr}",
+            status_container = event.get("status", {})
+            status_type = status_container.get("type", {})
+
+            status_text = status_type.get("detail", "Scheduled")
+            raw_status = status_type.get("name", "STATUS_SCHEDULED")
+
+            competitions = event.get("competitions", [])
+            if not competitions:
+                continue
+
+            competitors = competitions[0].get("competitors", [])
+            if len(competitors) < 2:
+                continue
+
+            home = next((c for c in competitors if c.get("homeAway") == "home"), competitors[0])
+            away = next((c for c in competitors if c.get("homeAway") == "away"), competitors[1])
+
+            h_abbr = home.get("team", {}).get("abbreviation", "UNK")
+            a_abbr = away.get("team", {}).get("abbreviation", "UNK")
+
+            is_live = raw_status == "STATUS_IN_PROGRESS"
+            is_finished = raw_status == "STATUS_FINAL"
+            has_started = is_live or is_finished
+
+            games.append({
+                "id": event.get("id"),
+                "homeTeam": h_abbr,
+                "awayTeam": a_abbr,
+                "homeScore": home.get("score", "0"),
+                "awayScore": away.get("score", "0"),
                 "status": status_text,
-                "rawStatus": event["status"]["type"]["description"]
+                "rawStatus": raw_status,
+                "isLive": is_live,
+                "hasStarted": has_started
             })
-            
-            # Home Team Card
-            active_teams_list.append({
-                "team": h_abbr,
-                "score": home["score"],
-                "context": f"vs {a_abbr}",
-                "status": status_text,
-                "rawStatus": event["status"]["type"]["description"]
-            })
-                
-        return active_teams_list
+
+        return games
     except Exception as e:
+        print(f"CRITICAL TICKER ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch scoreboard: {str(e)}")
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -19,7 +19,7 @@ main {
 }
 
 .card {
-  background: #fff;
+  background: #ffffff;
   max-width: 36rem;
   width: 100%;
   padding: 2rem;
@@ -65,7 +65,7 @@ button {
   border: 0;
   border-radius: 0.75rem;
   background: #4f46e5;
-  color: #fff;
+  color: #ffffff;
   font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
@@ -146,7 +146,7 @@ button:disabled {
   margin-right: 0.5rem;
   vertical-align: -0.1rem;
   border: 2px solid rgb(255 255 255 / 0.4);
-  border-top-color: #fff;
+  border-top-color: #ffffff;
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
 }
@@ -170,4 +170,76 @@ button:disabled {
 
 .result .winner {
   color: #4f46e5;
+}
+
+/* ==========================================================================
+   TICKER LAYOUT & SCROLLING ANIMATION
+   ========================================================================== */
+
+.ticker-wrap {
+  width: 100%;
+  overflow: hidden;
+  background: #1e293b; /* Matching dark slate theme */
+  padding: 12px 0;
+  border-bottom: 1px solid #334155;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 10;
+}
+
+.ticker {
+  display: flex;
+  width: max-content; /* Guarantees exact width calculation for -50% keyframe */
+  white-space: nowrap;
+  animation: marquee linear infinite;
+  will-change: transform;
+}
+
+.ticker:hover {
+  animation-play-state: paused;
+}
+
+.game-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 24px;
+  color: #f8fafc;
+  font-size: 0.9rem;
+  border-right: 1px solid #334155;
+}
+
+.ticker-team,
+.ticker-opponent,
+.ticker-matchup {
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.ticker-score {
+  font-weight: 800;
+  color: #38bdf8; /* Vibrant light blue score tracking */
+  background: rgba(56, 189, 248, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.ticker-status {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+/* Green indicator styling for live games */
+.game-card.is-live .ticker-score {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+}
+
+@keyframes marquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
 }

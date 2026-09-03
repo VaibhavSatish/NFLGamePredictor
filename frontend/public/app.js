@@ -110,3 +110,101 @@ predictBtn.addEventListener("click", async () => {
     predictBtn.textContent = "Calculate Game Odds";
   }
 });
+
+// --- LIVE TICKER INTEGRATION WITH DEDUPLICATION ---
+async function initScoreTicker() {
+  const tickerContainer = document.getElementById("ticker-content");
+  if (!tickerContainer) return;
+
+  try {
+    const response = await fetch("/api/scores");
+    const rawData = await response.json();
+
+    if (!rawData || rawData.length === 0) {
+      tickerContainer.innerHTML = "<div class='game-card'>No active games scheduled this week</div>";
+      return;
+    }
+
+    // 1. Filter out duplicate entries for the same matchup
+    const seenMatchups = new Set();
+    const uniqueGames = rawData.filter((item) => {
+      // If server provides a game ID, use it directly
+      if (item.id) {
+        if (seenMatchups.has(item.id)) return false;
+        seenMatchups.add(item.id);
+        return true;
+      }
+
+      // Fallback: Parse teams and build a unique pair key (e.g. "NE-SEA")
+      const rawTeam = item.team || item.homeTeam || "";
+      const contextStr = item.context || "";
+      const otherTeam = item.awayTeam || contextStr.replace(/^(vs|@|\s)+/i, "").trim();
+
+      const matchupKey = [rawTeam, otherTeam].filter(Boolean).sort().join("-");
+      if (!matchupKey || seenMatchups.has(matchupKey)) {
+        return false;
+      }
+      seenMatchups.add(matchupKey);
+      return true;
+    });
+
+    // 2. Build ticker HTML from deduplicated games list
+    const tickerHTML = uniqueGames.map((item) => {
+      let home = item.homeTeam;
+      let away = item.awayTeam;
+
+      // Extract home/away from legacy team/context structure if necessary
+      if (!home || !away) {
+        const rawTeam = item.team || "TBD";
+        const contextStr = item.context || "";
+        const otherTeam = contextStr.replace(/^(vs|@|\s)+/i, "").trim();
+
+        if (contextStr.trim().startsWith("@")) {
+          away = rawTeam;
+          home = otherTeam || "TBD";
+        } else {
+          home = rawTeam;
+          away = otherTeam || "TBD";
+        }
+      }
+
+      const isLive = Boolean(item.isLive || item.rawStatus === "STATUS_IN_PROGRESS");
+      const hasStarted = Boolean(item.hasStarted || (item.rawStatus && item.rawStatus !== "STATUS_SCHEDULED"));
+      const statusText = item.status || "Scheduled";
+
+      let scoreMarkup = "";
+      if (hasStarted) {
+        if (item.awayScore !== undefined && item.homeScore !== undefined) {
+          scoreMarkup = `<span class="ticker-score">${away} ${item.awayScore} - ${item.homeScore} ${home}</span>`;
+        } else {
+          scoreMarkup = `<span class="ticker-score">${home} ${item.score || 0}</span>`;
+        }
+      } else {
+        scoreMarkup = `<span class="ticker-matchup">${away} @ ${home}</span>`;
+      }
+
+      return `
+        <div class="game-card ${isLive ? "is-live" : ""}">
+          ${scoreMarkup}
+          <span class="ticker-status">(${statusText})</span>
+        </div>
+      `;
+    }).join('');
+
+    // 3. Smooth, readable animation duration
+    const computedDuration = Math.max(35, uniqueGames.length * 6); 
+    tickerContainer.style.animationDuration = `${computedDuration}s`;
+
+    // Clone HTML once for smooth infinite loop
+    tickerContainer.innerHTML = tickerHTML + tickerHTML;
+
+  } catch (error) {
+    console.error("Failed to load live score ticker:", error);
+    tickerContainer.innerHTML = "<div class='game-card'>Scores temporarily unavailable</div>";
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initScoreTicker();
+  setInterval(initScoreTicker, 30000);
+});

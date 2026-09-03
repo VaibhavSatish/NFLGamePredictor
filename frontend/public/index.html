@@ -7,6 +7,13 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <!-- Live Infinite Score Ticker Wheel -->
+    <div class="ticker-wrap">
+      <div class="ticker" id="ticker-content">
+        <div class="game-card">Loading live scores...</div>
+      </div>
+    </div>
+
     <main>
       <div class="card">
         <h1>NFL Game Predictor</h1>
@@ -21,19 +28,19 @@
         </div>
 
         <div id="app" hidden>
-        <div class="grid">
-          <label>
-            Home Team
-            <select id="homeTeam"></select>
-          </label>
-          <label>
-            Away Team
-            <select id="awayTeam"></select>
-          </label>
-        </div>
-        <button id="predictBtn" type="button">Calculate Game Odds</button>
-        <p id="error" class="error" hidden></p>
-        <div id="result" class="result" hidden></div>
+          <div class="grid">
+            <label>
+              Home Team
+              <select id="homeTeam"></select>
+            </label>
+            <label>
+              Away Team
+              <select id="awayTeam"></select>
+            </label>
+          </div>
+          <button id="predictBtn" type="button">Calculate Game Odds</button>
+          <p id="error" class="error" hidden></p>
+          <div id="result" class="result" hidden></div>
         </div>
       </div>
     </main>

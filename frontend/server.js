@@ -41,6 +41,16 @@ app.post("/api/predict", async (req, res) => {
   }
 });
 
+app.get("/api/scores", async (req, res) => {
+  try {
+    const response = await axios.get(`${PYTHON_API_URL}/api/scores/active-teams`, { timeout: 3000 });
+    res.json(response.data);
+  } catch (error) {
+    console.error("Error fetching live scores from Python API:", error.message);
+    res.status(500).json({ error: "Failed to load live scores" });
+  }
+});
+
 // Express 5 runs this callback even when the bind failed, so confirm the
 // socket is actually listening before claiming the server is up.
 const server = app.listen(PORT, () => {
