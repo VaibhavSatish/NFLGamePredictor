@@ -49,7 +49,7 @@ app.post("/api/predict", async (req, res) => {
 
 app.get("/api/scores", async (req, res) => {
   try {
-    const response = await axios.get(`${PYTHON_API_URL}/api/scores/active-teams`, { timeout: 3000 });
+    const response = await axios.get(`${PYTHON_API_URL}/api/scores`, { timeout: 3000 });
     res.json(response.data);
   } catch (error) {
     console.error("Error fetching live scores from Python API:", error.message);

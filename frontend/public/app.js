@@ -18,7 +18,7 @@ const TEAM_COLORS = {
   SF: "#AA0000", TB: "#D50A0A", TEN: "#4B92DB", WAS: "#5A1414",
 };
 function teamColor(abbr) {
-  return TEAM_COLORS[abbr] || "#d7a13b";
+  return TEAM_COLORS[abbr];
 }
 
 const homeSelect = document.getElementById("homeTeam");
@@ -140,8 +140,8 @@ async function waitForModel() {
   revealApp();
 }
 
-fillSelect(homeSelect, "KC");
-fillSelect(awaySelect, "SF");
+fillSelect(homeSelect, "SEA");
+fillSelect(awaySelect, "LAR");
 tintSelect(homeSelect);
 tintSelect(awaySelect);
 homeSelect.addEventListener("change", () => tintSelect(homeSelect));
