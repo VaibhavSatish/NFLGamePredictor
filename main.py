@@ -6,7 +6,6 @@ import re
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field, AliasChoices, ConfigDict
-import requests
 from scipy.stats import norm
 import xgboost
 from sklearn.metrics import mean_absolute_error, r2_score
@@ -367,48 +366,6 @@ def normalize_team_abbr(abbr: str) -> str:
     if aliases.get(t) in team_stats:
         return aliases[t]
     return t
-
-
-def parse_espn_events(data: dict) -> list:
-    """Parses ESPN raw JSON event payload into app-compatible game objects."""
-    games = []
-    for event in data.get("events", []):
-        status_container = event.get("status", {})
-        status_type = status_container.get("type", {})
-
-        status_text = status_type.get("detail", "Scheduled")
-        raw_status = status_type.get("name", "STATUS_SCHEDULED")
-
-        competitions = event.get("competitions", [])
-        if not competitions:
-            continue
-
-        competitors = competitions[0].get("competitors", [])
-        if len(competitors) < 2:
-            continue
-
-        home = next((c for c in competitors if c.get("homeAway") == "home"), competitors[0])
-        away = next((c for c in competitors if c.get("homeAway") == "away"), competitors[1])
-
-        h_abbr = home.get("team", {}).get("abbreviation", "UNK")
-        a_abbr = away.get("team", {}).get("abbreviation", "UNK")
-
-        is_live = raw_status == "STATUS_IN_PROGRESS"
-        is_finished = raw_status == "STATUS_FINAL"
-        has_started = is_live or is_finished
-
-        games.append({
-            "id": str(event.get("id")),
-            "homeTeam": h_abbr,
-            "awayTeam": a_abbr,
-            "homeScore": home.get("score", "0"),
-            "awayScore": away.get("score", "0"),
-            "status": status_text,
-            "rawStatus": raw_status,
-            "isLive": is_live,
-            "hasStarted": has_started
-        })
-    return games
 
 # ==============================================================================
 # BACKGROUND TASKS
